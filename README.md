@@ -1,0 +1,110 @@
+# edge-vision-quant
+
+**A compact CNN image classifier compressed with INT8 post-training quantization for on-device / edge inference: 3.78x smaller and ~1.8x faster on CPU, with a 0.13 percentage-point accuracy change.**
+
+Trained and evaluated from scratch in PyTorch on FashionMNIST. The focus is the
+on-device story that matters for edge ML: how much model size and latency you can
+cut with INT8 quantization while keeping accuracy essentially flat.
+
+## Results
+
+FashionMNIST test set (10,000 images). Measured on CPU with the `qnnpack` INT8
+backend (the same kernels used for ARM / mobile deployment). Numbers below are
+real outputs of `evaluate.py`, not estimates.
+
+| Metric | FP32 | INT8 | Change |
+|---|---|---|---|
+| Test accuracy (%) | 91.55 | 91.42 | -0.13 pts |
+| Model size (MB) | 0.385 | 0.102 | **3.78x smaller** |
+| Latency (ms/img) | 0.362 | 0.203 | **~1.8x faster** |
+
+INT8 quantization shrinks the model **3.78x** and speeds up single-image CPU
+inference **~1.8x**, while accuracy stays within **0.13 percentage points** of the
+FP32 baseline. Latency is a wall-clock measurement (200 single-sample runs after
+20 warmup runs) and varies a few percent between runs.
+
+## Architecture
+
+`TinyConvNet` (~99K parameters), defined from scratch in [`model.py`](model.py):
+
+```
+Input 1x28x28
+  -> Conv(1->16, 3x3) -> BN -> ReLU -> MaxPool   (28 -> 14)
+  -> Conv(16->32, 3x3) -> BN -> ReLU -> MaxPool  (14 -> 7)
+  -> Conv(32->64, 3x3) -> BN -> ReLU -> MaxPool  (7  -> 3)
+  -> Flatten -> FC(576 -> 128) -> ReLU -> FC(128 -> 10)
+```
+
+It is deliberately quantization-friendly:
+
+- **`QuantStub` / `DeQuantStub`** bracket the network so static quantization can
+  insert observers at the input/output boundaries.
+- Every conv is followed by **BatchNorm + ReLU**, so `(conv, bn, relu)` triples
+  (and the `(fc, relu)` pair) are **fused** before quantization. Fusion folds
+  BatchNorm into the preceding conv and produces a single INT8 kernel per block,
+  which is what buys both the speedup and the retained accuracy.
+
+## Quantization approach
+
+Post-training **static** INT8 quantization ([`quantize.py`](quantize.py)):
+
+1. Load the trained FP32 weights.
+2. Fuse conv-bn-relu / linear-relu modules.
+3. Attach the `qnnpack` qconfig (ARM / mobile INT8 backend).
+4. `prepare()` inserts activation observers, then a **calibration pass** over
+   ~20 batches of real training data records activation ranges.
+5. `convert()` produces a true INT8 model with quantized weights and activations.
+
+Static PTQ (vs dynamic) quantizes activations too, which is what gives the full
+size and latency win on a conv-heavy vision model.
+
+## How to run
+
+```bash
+# 1. Install (CPU-only PyTorch is fine)
+pip install -r requirements.txt
+
+# 2. Train the FP32 model (~2-3 min on CPU, 8 epochs)
+python3 train.py --epochs 8
+#   -> artifacts/model_fp32.pth
+
+# 3. Quantize to INT8 (post-training static)
+python3 quantize.py
+#   -> artifacts/model_int8.pth
+
+# 4. Benchmark FP32 vs INT8 (accuracy, size, latency)
+python3 evaluate.py
+#   -> prints the results table, writes results.md
+```
+
+FashionMNIST downloads automatically on first run.
+
+## Repo layout
+
+| File | Purpose |
+|---|---|
+| `model.py` | `TinyConvNet` architecture (quantization-ready) |
+| `data.py` | FashionMNIST loaders + normalization |
+| `train.py` | FP32 training loop, saves `model_fp32.pth` |
+| `quantize.py` | Static INT8 PTQ (fuse -> prepare -> calibrate -> convert) |
+| `evaluate.py` | Accuracy / size / latency benchmark, writes `results.md` |
+| `results.md` | Generated benchmark table |
+
+## What I learned
+
+- **Fusion is what makes PTQ work.** Fusing conv-bn-relu before quantizing folds
+  BatchNorm into the conv and keeps the INT8 accuracy drop negligible; skipping it
+  hurts both accuracy and speed.
+- **Static beats dynamic for CNNs.** Dynamic quantization only touches weights;
+  static PTQ quantizes activations via a calibration pass, which is where most of
+  the size and latency reduction on a vision model comes from.
+- **Backend matters for the edge story.** Using the `qnnpack` engine benchmarks
+  the same INT8 kernels that run on ARM / mobile, so the numbers reflect a real
+  on-device deployment target rather than a server GPU.
+- **The compression is close to free here:** 3.78x smaller and ~1.8x faster for a
+  0.13-point accuracy change, which is the tradeoff you want when shipping a model
+  onto a phone or embedded device.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
