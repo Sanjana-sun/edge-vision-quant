@@ -1,0 +1,10 @@
+# One-click deploy on Render (https://render.com):
+#   New + -> Blueprint -> connect this repo -> Apply.
+# Docker host with enough RAM to load PyTorch (Vercel/serverless cannot run this).
+services:
+  - type: web
+    name: edge-vision-quant
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    autoDeploy: true
