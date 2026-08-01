@@ -14,6 +14,6 @@ RUN pip install --no-cache-dir -r server/requirements.txt
 ENV OMP_NUM_THREADS=1
 
 EXPOSE 8000
-# artifacts/model_*.pth and web/ are committed, so this runs out of the box.
-# Shell form so $PORT (injected by Render/Railway/HF/Fly) is honored; defaults to 8000.
-CMD uvicorn server.main:app --host 0.0.0.0 --port ${PORT:-8000}
+# The app reads PORT from the environment itself (server/main.py __main__),
+# so no shell variable expansion is required anywhere.
+CMD ["python", "-m", "server.main"]

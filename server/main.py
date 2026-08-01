@@ -239,3 +239,13 @@ if os.path.isdir(WEB):
     @app.get("/app.js")
     def appjs():
         return FileResponse(os.path.join(WEB, "app.js"))
+
+
+# ---------- entrypoint ----------
+# Read the port in Python so no shell variable expansion is needed anywhere
+# (Railway/Render/etc. inject PORT). Run with: python -m server.main
+if __name__ == "__main__":
+    import uvicorn
+
+    port = int(os.environ.get("PORT") or 8000)
+    uvicorn.run(app, host="0.0.0.0", port=port)
