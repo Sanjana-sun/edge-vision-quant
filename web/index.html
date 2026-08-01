@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>On-Device INT8 Image Classifier — live demo</title>
+<meta name="description" content="A compact CNN quantized to INT8 for edge inference, running live in your browser via ONNX Runtime Web. 3.78x smaller and 1.8x faster with almost no accuracy loss." />
+<style>
+  :root {
+    --bg: #0f1220; --panel: #171a2b; --panel2: #1e2238; --ink: #e8eaf2;
+    --muted: #9aa1bd; --line: #2a2f4a; --accent: #7c9cff; --accent2: #56d6b0;
+    --warn: #f0b866;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 70% -10%, #1a2140 0%, var(--bg) 55%);
+    color: var(--ink); font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.55; -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 40px 22px 70px; }
+  header.hero { text-align: center; margin-bottom: 34px; }
+  .kicker { color: var(--accent2); font-weight: 600; letter-spacing: .12em; text-transform: uppercase; font-size: 12px; }
+  h1 { font-size: 34px; margin: 8px 0 6px; letter-spacing: -.02em; }
+  .sub { color: var(--muted); max-width: 640px; margin: 0 auto 16px; }
+  .links a { display: inline-block; margin: 0 8px; padding: 7px 14px; border: 1px solid var(--line);
+    border-radius: 999px; color: var(--ink); font-size: 14px; background: var(--panel); }
+  .links a:hover { border-color: var(--accent); text-decoration: none; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 22px; margin: 18px 0; }
+  h2 { font-size: 20px; margin: 4px 0 2px; }
+  .section-sub { color: var(--muted); font-size: 14px; margin: 0 0 16px; }
+
+  /* demo */
+  .demo { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  @media (max-width: 720px) { .demo { grid-template-columns: 1fr; } }
+  .gallery { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .thumb { aspect-ratio: 1; border: 1px solid var(--line); border-radius: 10px; background: #000; cursor: pointer;
+    image-rendering: pixelated; padding: 0; overflow: hidden; transition: border-color .15s, transform .1s; }
+  .thumb img { width: 100%; height: 100%; image-rendering: pixelated; display: block; }
+  .thumb:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .thumb.active { border-color: var(--accent2); box-shadow: 0 0 0 2px rgba(86,214,176,.25); }
+  .stage { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  #view { width: 168px; height: 168px; image-rendering: pixelated; border-radius: 12px; border: 1px solid var(--line); background: #000; }
+  .pred { text-align: center; }
+  .pred .label { font-size: 24px; font-weight: 700; }
+  .pred .meta { color: var(--muted); font-size: 13px; }
+  .truth { font-size: 13px; }
+  .truth .ok { color: var(--accent2); } .truth .no { color: var(--warn); }
+  .bars { margin-top: 8px; }
+  .bar-row { display: grid; grid-template-columns: 92px 1fr 44px; align-items: center; gap: 8px; font-size: 12px; margin: 3px 0; }
+  .bar-track { height: 8px; background: var(--panel2); border-radius: 6px; overflow: hidden; }
+  .bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 6px; transition: width .25s; }
+  .bar-row.top .name { color: var(--ink); font-weight: 600; }
+  .bar-row .name, .bar-row .pct { color: var(--muted); }
+  .hint { color: var(--muted); font-size: 12px; }
+  .status { font-size: 13px; color: var(--warn); }
+  .upload { margin-top: 12px; font-size: 13px; color: var(--muted); }
+  input[type=file] { color: var(--muted); font-size: 12px; }
+
+  /* benchmark */
+  .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  @media (max-width: 560px) { .stat-grid { grid-template-columns: 1fr; } }
+  .stat { background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .stat .big { font-size: 26px; font-weight: 700; }
+  .stat .cap { color: var(--muted); font-size: 12px; }
+  .stat .accent { color: var(--accent2); }
+  .cmp { margin-top: 18px; }
+  .cmp-row { margin: 10px 0; }
+  .cmp-row .lab { font-size: 13px; color: var(--muted); margin-bottom: 4px; display: flex; justify-content: space-between; }
+  .cmp-track { position: relative; height: 22px; }
+  .cmp-bar { position: absolute; top: 0; height: 9px; border-radius: 6px; }
+  .cmp-bar.fp { top: 0; background: #4a5578; }
+  .cmp-bar.int { top: 12px; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+  .legend { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; vertical-align: middle; margin: 0 4px 0 12px; }
+  .steps { color: var(--muted); font-size: 14px; padding-left: 18px; }
+  .steps li { margin: 5px 0; }
+  .steps b { color: var(--ink); font-weight: 600; }
+  footer { text-align: center; color: var(--muted); font-size: 13px; margin-top: 26px; }
+  code { background: var(--panel2); padding: 1px 6px; border-radius: 5px; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">Edge ML · Model Compression</div>
+    <h1>On-Device INT8 Image Classifier</h1>
+    <p class="sub">A compact CNN trained from scratch on FashionMNIST, then quantized to INT8 for efficient edge inference. The model runs <b>live in your browser</b> below via ONNX Runtime Web, no server involved.</p>
+    <div class="links">
+      <a href="https://github.com/Sanjana-sun/edge-vision-quant" target="_blank" rel="noopener">GitHub repo ↗</a>
+      <a href="#benchmark">Benchmark ↓</a>
+    </div>
+  </header>
+
+  <section class="card">
+    <h2>Live demo</h2>
+    <p class="section-sub">Pick a test image. It is preprocessed exactly as in training and classified on-device. <span id="status" class="status">Loading model…</span></p>
+    <div class="demo">
+      <div>
+        <div class="gallery" id="gallery"></div>
+        <p class="hint" style="margin-top:12px">10 held-out FashionMNIST test images, one per class.</p>
+        <div class="upload">
+          Or upload your own: <input type="file" id="file" accept="image/*" /><br>
+          <span class="hint">Works best on a grayscale clothing item, light on a dark background (the FashionMNIST style).</span>
+        </div>
+      </div>
+      <div class="stage">
+        <canvas id="view" width="28" height="28"></canvas>
+        <div class="pred">
+          <div class="label" id="predLabel">—</div>
+          <div class="meta" id="predMeta">select an image to classify</div>
+          <div class="truth" id="truth"></div>
+        </div>
+        <div class="bars" id="bars" style="width:100%"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" id="benchmark">
+    <h2>What quantization bought</h2>
+    <p class="section-sub">Full FP32 model vs the INT8 post-training-quantized model, on the 10,000-image FashionMNIST test set. Latency measured on the <code>qnnpack</code> (ARM/mobile) backend.</p>
+    <div class="stat-grid">
+      <div class="stat"><div class="big accent">3.78×</div><div class="cap">smaller on disk (0.385 → 0.102 MB)</div></div>
+      <div class="stat"><div class="big accent">1.78×</div><div class="cap">faster per image (0.362 → 0.203 ms)</div></div>
+      <div class="stat"><div class="big">−0.13 pts</div><div class="cap">accuracy change (91.55% → 91.42%)</div></div>
+    </div>
+    <div class="cmp">
+      <div class="cmp-row">
+        <div class="lab"><span>Model size</span><span>lower is better</span></div>
+        <div class="cmp-track">
+          <div class="cmp-bar fp" style="width:100%"></div>
+          <div class="cmp-bar int" style="width:26.5%"></div>
+        </div>
+      </div>
+      <div class="cmp-row">
+        <div class="lab"><span>Latency / image</span><span>lower is better</span></div>
+        <div class="cmp-track">
+          <div class="cmp-bar fp" style="width:100%"></div>
+          <div class="cmp-bar int" style="width:56%"></div>
+        </div>
+      </div>
+      <div class="legend"><span class="sw" style="background:#4a5578"></span>FP32<span class="sw" style="background:#56d6b0"></span>INT8</div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>How it works</h2>
+    <ol class="steps">
+      <li><b>Train from scratch.</b> A ~99K-parameter CNN (3 conv blocks + 2 FC layers), built quantization-friendly with fuseable conv-BN-ReLU triples.</li>
+      <li><b>Static INT8 post-training quantization.</b> Fuse modules, insert observers, calibrate on real data, then convert weights and activations to 8-bit integers.</li>
+      <li><b>Benchmark honestly.</b> Compare FP32 vs INT8 on accuracy, on-disk size, and per-image latency on the ARM-oriented <code>qnnpack</code> backend.</li>
+      <li><b>Run on the edge.</b> The FP32 graph is exported to ONNX and runs client-side here via WebAssembly, the same portability story that makes on-device inference practical.</li>
+    </ol>
+    <p class="hint" style="margin-top:10px">Note: this page runs the FP32 ONNX graph for predictions (broad browser support). The size and latency wins above are the measured INT8 results from the repo.</p>
+  </section>
+
+  <footer>
+    Built by Sanjana Injamuri · <a href="https://github.com/Sanjana-sun/edge-vision-quant" target="_blank" rel="noopener">github.com/Sanjana-sun/edge-vision-quant</a>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.2/dist/ort.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

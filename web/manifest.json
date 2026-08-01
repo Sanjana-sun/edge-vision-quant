@@ -1,0 +1,68 @@
+{
+  "classNames": [
+    "T-shirt/top",
+    "Trouser",
+    "Pullover",
+    "Dress",
+    "Coat",
+    "Sandal",
+    "Shirt",
+    "Sneaker",
+    "Bag",
+    "Ankle boot"
+  ],
+  "mean": 0.286,
+  "std": 0.353,
+  "samples": [
+    {
+      "file": "samples/s0.png",
+      "trueLabel": "T-shirt/top",
+      "trueIdx": 0
+    },
+    {
+      "file": "samples/s1.png",
+      "trueLabel": "Trouser",
+      "trueIdx": 1
+    },
+    {
+      "file": "samples/s2.png",
+      "trueLabel": "Pullover",
+      "trueIdx": 2
+    },
+    {
+      "file": "samples/s3.png",
+      "trueLabel": "Dress",
+      "trueIdx": 3
+    },
+    {
+      "file": "samples/s4.png",
+      "trueLabel": "Coat",
+      "trueIdx": 4
+    },
+    {
+      "file": "samples/s5.png",
+      "trueLabel": "Sandal",
+      "trueIdx": 5
+    },
+    {
+      "file": "samples/s6.png",
+      "trueLabel": "Shirt",
+      "trueIdx": 6
+    },
+    {
+      "file": "samples/s7.png",
+      "trueLabel": "Sneaker",
+      "trueIdx": 7
+    },
+    {
+      "file": "samples/s8.png",
+      "trueLabel": "Bag",
+      "trueIdx": 8
+    },
+    {
+      "file": "samples/s9.png",
+      "trueLabel": "Ankle boot",
+      "trueIdx": 9
+    }
+  ]
+}
