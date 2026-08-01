@@ -8,7 +8,11 @@ cut with INT8 quantization while keeping accuracy essentially flat.
 
 ## Full-stack demo app
 
+**Live: [edge-vision-quant-production.up.railway.app](https://edge-vision-quant-production.up.railway.app)**
+
 A FastAPI backend serves **both** the FP32 and the real INT8 model and runs them on every request, with a frontend that shows the comparison live.
+
+> Note: the live app runs on an x86 cloud CPU, where the ARM-tuned INT8 (`qnnpack`) kernels aren't accelerated, so live per-request latency can show INT8 slower. The 3.78× smaller / ~1.8× faster headline is the **on-device (ARM)** measurement from `evaluate.py`.
 
 <!-- Add a screenshot at web/screenshot.png and uncomment the line below -->
 <!-- ![demo](web/screenshot.png) -->

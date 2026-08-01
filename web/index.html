@@ -132,6 +132,7 @@
           <div class="mcard"><h3>INT8 (quantized)</h3><div class="pred" id="int8Pred">—</div><div class="chips" id="int8Chips"></div><div id="int8Bars"></div></div>
         </div>
         <div class="truth" id="truth"></div>
+        <p class="hint" style="margin-top:10px">Latency is measured on <b>this host's CPU</b>. On the deployed x86 cloud server the ARM-tuned INT8 (<code>qnnpack</code>) kernels aren't accelerated, so INT8 can read slower here; the real on-device speedup is the ARM number in the benchmark below.</p>
       </div>
     </div>
   </section>
@@ -139,8 +140,9 @@
   <!-- BENCHMARK -->
   <section class="card" id="bench">
     <h2>Throughput &amp; latency benchmark</h2>
-    <p class="section-sub">Runs many single-image inferences on the server and times each model. Latency measured on the <code>qnnpack</code> (ARM/mobile) INT8 backend.</p>
-    <div class="row" style="margin-bottom:14px"><button class="btn primary" id="runBench">Run benchmark (200 runs)</button><span class="hint" id="benchStatus"></span></div>
+    <p class="section-sub">Runs many single-image inferences on <b>this host</b> and times each model.</p>
+    <p class="hint" style="margin:-8px 0 12px"><b>On-device target (ARM / <code>qnnpack</code>):</b> INT8 is <b>3.78× smaller</b> and <b>~1.8× faster</b> than FP32 for a 0.13-point accuracy change. The live run below reflects this server's CPU instead: on x86 the ARM-tuned INT8 kernels aren't accelerated, so expect a different ratio here.</p>
+    <div class="row" style="margin-bottom:14px"><button class="btn primary" id="runBench">Run benchmark on this host (200 runs)</button><span class="hint" id="benchStatus"></span></div>
     <div class="stat-grid" id="benchStats" style="display:none">
       <div class="stat"><div class="big accent" id="bSpeed">—</div><div class="cap">INT8 speedup</div></div>
       <div class="stat"><div class="big" id="bFp32">—</div><div class="cap">FP32 latency (ms) · img/s</div></div>
@@ -177,7 +179,7 @@
       <div>
         <ol class="steps">
           <li><b>Dataset.</b> FashionMNIST, 28×28 grayscale, 10 classes, normalized with mean 0.286 / std 0.353.</li>
-          <li><b>Results.</b> INT8 is 3.78× smaller and ~1.8× faster than FP32 for a 0.13-point accuracy change.</li>
+          <li><b>Results.</b> On the ARM/<code>qnnpack</code> on-device target, INT8 is 3.78× smaller and ~1.8× faster than FP32 for a 0.13-point accuracy change (measured on-device, not on this x86 host).</li>
           <li><b>Limitations.</b> Trained only on FashionMNIST, so uploads and drawings work best as a single light clothing item on a dark background; the weakest class is Shirt (confused with T-shirt/Coat).</li>
         </ol>
       </div>
