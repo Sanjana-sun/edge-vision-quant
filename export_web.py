@@ -50,3 +50,25 @@ for idx, c in enumerate(sorted(picked)):
 with open("web/manifest.json", "w") as f:
     json.dump({"classNames": CLASS_NAMES, "mean": 0.2860, "std": 0.3530, "samples": manifest}, f, indent=2)
 print("samples:", len(manifest), "| PIL:", have_pil)
+
+# --- confusion matrix + per-class accuracy for the INT8 (deployed) model ---
+from evaluate import load_int8
+from data import get_loaders
+
+int8 = load_int8("artifacts/model_int8.pth")
+_, test_loader = get_loaders(batch_size=256, num_workers=0)
+n = len(CLASS_NAMES)
+cm = np.zeros((n, n), dtype=int)  # rows = true, cols = predicted
+with torch.no_grad():
+    for x, y in test_loader:
+        preds = int8(x).argmax(1).numpy()
+        for t, p in zip(y.numpy(), preds):
+            cm[t, p] += 1
+per_class_acc = [round(100.0 * cm[i, i] / cm[i].sum(), 2) for i in range(n)]
+overall = round(100.0 * cm.trace() / cm.sum(), 2)
+with open("web/confusion.json", "w") as f:
+    json.dump({
+        "classNames": CLASS_NAMES, "model": "INT8",
+        "matrix": cm.tolist(), "perClassAcc": per_class_acc, "overallAcc": overall,
+    }, f, indent=2)
+print("confusion.json written | INT8 overall acc:", overall)
