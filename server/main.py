@@ -63,17 +63,32 @@ def _load_int8(path):
 
 @app.on_event("startup")
 def _startup():
-    fp32_path = os.path.join(ARTIFACTS, "model_fp32.pth")
-    int8_path = os.path.join(ARTIFACTS, "model_int8.pth")
-    if not (os.path.exists(fp32_path) and os.path.exists(int8_path)):
-        raise RuntimeError("Missing model artifacts. Run train.py and quantize.py first.")
-    STATE["fp32"] = _load_fp32(fp32_path)
-    STATE["int8"] = _load_int8(int8_path)
-    STATE["fp32_mb"] = os.path.getsize(fp32_path) / (1024 * 1024)
-    STATE["int8_mb"] = os.path.getsize(int8_path) / (1024 * 1024)
-    manifest = os.path.join(WEB, "manifest.json")
-    if os.path.exists(manifest):
-        STATE["samples"] = json.load(open(manifest)).get("samples", [])
+    """Load models, but never crash the process: capture errors so the server
+    still binds its port and reports the failure via /api/health."""
+    import traceback
+    try:
+        fp32_path = os.path.join(ARTIFACTS, "model_fp32.pth")
+        int8_path = os.path.join(ARTIFACTS, "model_int8.pth")
+        if not (os.path.exists(fp32_path) and os.path.exists(int8_path)):
+            raise RuntimeError("Missing model artifacts (artifacts/model_fp32.pth / model_int8.pth).")
+        STATE["fp32"] = _load_fp32(fp32_path)
+        STATE["int8"] = _load_int8(int8_path)
+        STATE["fp32_mb"] = os.path.getsize(fp32_path) / (1024 * 1024)
+        STATE["int8_mb"] = os.path.getsize(int8_path) / (1024 * 1024)
+        manifest = os.path.join(WEB, "manifest.json")
+        if os.path.exists(manifest):
+            STATE["samples"] = json.load(open(manifest)).get("samples", [])
+        STATE["error"] = None
+        print("[startup] models loaded OK")
+    except Exception as e:  # noqa: BLE001
+        STATE["error"] = f"{type(e).__name__}: {e}"
+        print("[startup] FAILED:", STATE["error"])
+        traceback.print_exc()
+
+
+def _require_models():
+    if STATE["fp32"] is None or STATE["int8"] is None:
+        raise HTTPException(503, STATE.get("error") or "models not loaded")
 
 
 # ---------- preprocessing / inference ----------
@@ -147,11 +162,13 @@ def _classify(x, true_idx=None):
 # ---------- API ----------
 @app.get("/api/health")
 def health():
+    loaded = STATE["fp32"] is not None and STATE["int8"] is not None
     return {
-        "status": "ok",
+        "status": "ok" if loaded else "degraded",
         "fp32Loaded": STATE["fp32"] is not None,
         "int8Loaded": STATE["int8"] is not None,
         "numSamples": len(STATE["samples"]),
+        "error": STATE.get("error"),
     }
 
 
@@ -162,6 +179,7 @@ def samples():
 
 @app.get("/api/classify/{sample_idx}")
 def classify_sample(sample_idx: int, noise: float = 0.0):
+    _require_models()
     if not (0 <= sample_idx < len(STATE["samples"])):
         raise HTTPException(404, "sample not found")
     s = STATE["samples"][sample_idx]
@@ -171,6 +189,7 @@ def classify_sample(sample_idx: int, noise: float = 0.0):
 
 @app.post("/api/classify")
 async def classify_upload(file: UploadFile = File(...), noise: float = 0.0):
+    _require_models()
     try:
         img = Image.open(io.BytesIO(await file.read()))
     except Exception:
@@ -180,6 +199,7 @@ async def classify_upload(file: UploadFile = File(...), noise: float = 0.0):
 
 @app.get("/api/benchmark")
 def benchmark(runs: int = 200):
+    _require_models()
     runs = max(20, min(runs, 1000))
     x = _to_tensor(Image.open(os.path.join(WEB, STATE["samples"][0]["file"]))) \
         if STATE["samples"] else torch.zeros(1, 1, 28, 28)
